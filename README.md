@@ -83,3 +83,95 @@ Integrate AWS X-Ray for distributed tracing and performance analysis. By visuali
 
 7. **Failure Injection Testing**
 Proactively simulate failures in your Lambda functions using tools like AWS Fault Injection Simulator. This allows you to validate the resilience of your application by intentionally introducing errors and observing how your system responds.
+
+
+## Best Practives for Lambda
+
+1. Use Global Clients for External Services (e.g., DynamoDB, S3, SQS)
+    - Why? Creating new connections on every request increases latency and resource consumption.
+    - How? Declare clients outside the lambda_handler function.
+
+```python
+import boto3
+
+# Initialize the client globally (outside the handler)
+dynamodb = boto3.resource('dynamodb')
+
+def lambda_handler(event, context):
+    table = dynamodb.Table('your_table_name')
+    response = table.get_item(Key={'id': '123'})
+    return response.get('Item', {})
+```
+
+2. Minimize Deployment Package Size
+    - Why? A large package increases cold start time.
+    - How?
+        * Use Lambda layers for shared dependencies (e.g., boto3, numpy).
+        * Remove unnecessary libraries (e.g., unused parts of boto3).
+        * **Use a minimal runtime like AWS Lambda’s Graviton (ARM64) instead of x86.**
+
+3. Use CloudWatch Logging Efficiently
+    - Why? Excessive logging increases costs and slows down execution.
+    - How?
+        - Avoid printing large payloads.
+        - Use structured logs with JSON for easy querying in CloudWatch.
+```python
+import json
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event, context):
+    logger.info(json.dumps({"message": "Processing request", "event": event}))
+```
+
+### Comparison: Boto3 resource vs client
+
+When using Boto3 in AWS Lambda, choosing between resource and client depends on your use case.
+
+| Feature	| boto3.resource	| boto3.client |
+|---|---|---|
+| Level of abstraction |	Higher-level API (Object-Oriented)	| Lower-level API (Closer to AWS SDK) |
+| Ease of use	| More Pythonic & intuitive | More control, but verbose |
+| Performance	| Slightly slower (built-in abstraction)	| Faster (direct API calls) |
+| When to use |	Frequent CRUD operations (e.g., DynamoDB, S3)	| Performance-critical, high-throughput scenarios |
+| Supports pagination?|	Yes (e.g., .scan())	| No, requires manual pagination |
+| Response structure |	Returns objects (e.g., Table, Bucket) |	Returns JSON/dict responses |
+| Example services|DynamoDB, S3 | S3, Lambda, SNS, SQS |
+
+```python
+import boto3
+
+# Global resource connection (recommended for AWS Lambda)
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('your_table_name')
+
+def lambda_handler(event, context):
+    response = table.get_item(Key={'id': '123'})
+    return response.get('Item', {})
+```
+
+```python
+import boto3
+
+# Global client connection
+dynamodb_client = boto3.client('dynamodb')
+
+def lambda_handler(event, context):
+    response = dynamodb_client.get_item(
+        TableName='your_table_name',
+        Key={'id': {'S': '123'}}
+    )
+    return response.get('Item', {})
+```
+
+
+**TL;DR:** Use resource for ease of use, and client for performance & fine control.
+
+
+
+
+
+
+
