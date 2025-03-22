@@ -96,9 +96,10 @@ import boto3
 
 # Initialize the client globally (outside the handler)
 dynamodb = boto3.resource('dynamodb')
+# Global table reference
+table = dynamodb.Table('your_table_name')
 
 def lambda_handler(event, context):
-    table = dynamodb.Table('your_table_name')
     response = table.get_item(Key={'id': '123'})
     return response.get('Item', {})
 ```
